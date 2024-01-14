@@ -244,6 +244,7 @@ def train():
     # Set RoPE scaling factor
     config = transformers.AutoConfig.from_pretrained(
         model_args.model_name_or_path,
+        token = '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',
         cache_dir=training_args.cache_dir,
     )
 
@@ -261,6 +262,7 @@ def train():
     # Load model and tokenizer
     model = transformers.AutoModelForCausalLM.from_pretrained(
         model_args.model_name_or_path,
+        token = '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',
         config=config,
         cache_dir=training_args.cache_dir,
         torch_dtype=torch.bfloat16,
@@ -270,6 +272,7 @@ def train():
         model_args.model_name_or_path,
         cache_dir=training_args.cache_dir,
         model_max_length=training_args.model_max_length,
+        token = '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',
         padding_side="right",
         use_fast=True,
     )

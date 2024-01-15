@@ -38,10 +38,12 @@ DEFAULT_EOS_TOKEN = "</s>"
 DEFAULT_BOS_TOKEN = "<s>"
 DEFAULT_UNK_TOKEN = "<unk>"
 
+
 def _make_r_io_base(f, mode: str):
     if not isinstance(f, io.IOBase):
         f = open(f, mode=mode)
     return f
+
 
 def jload(f, mode="r"):
     """Load a .json file into a dictionary."""
@@ -49,6 +51,7 @@ def jload(f, mode="r"):
     jdict = json.load(f)
     f.close()
     return jdict
+
 
 PROMPT_DICT = {
     "prompt_input": (
@@ -61,7 +64,7 @@ PROMPT_DICT = {
         "Write a response that appropriately completes the request.\n\n"
         "### Instruction:\n{instruction}\n\n### Response:"
     ),
-    "prompt_no_input_llama2":(
+    "prompt_no_input_llama2": (
         "[INST] <<SYS>>\n"
         "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe.  Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.\n\n"
         "If a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information.\n"
@@ -79,13 +82,15 @@ PROMPT_DICT = {
 
 @dataclass
 class ModelArguments:
-    model_name_or_path: Optional[str] = field(default="EleutherAI/pythia-1.4b-deduped")
+    model_name_or_path: Optional[str] = field(
+        default="EleutherAI/pythia-1.4b-deduped")
     model_type: Optional[str] = field(default="llama")
 
 
 @dataclass
 class DataArguments:
-    data_path: str = field(default=None, metadata={"help": "Path to the training data."})
+    data_path: str = field(default=None, metadata={
+                           "help": "Path to the training data."})
 
 
 @dataclass
@@ -94,7 +99,8 @@ class TrainingArguments(transformers.TrainingArguments):
     optim: str = field(default="adamw_torch")
     model_max_length: int = field(
         default=8192 * 4,
-        metadata={"help": "Maximum sequence length. Sequences will be right padded (and possibly truncated)."},
+        metadata={
+            "help": "Maximum sequence length. Sequences will be right padded (and possibly truncated)."},
     )
     use_flash_attn: bool = field(
         default=True,
@@ -110,8 +116,10 @@ class TrainingArguments(transformers.TrainingArguments):
     )
     trainable_params: str = field(
         default="embed,norm",
-        metadata={"help": "Additional trainable parameters except LoRA weights, if low rank training."},
+        metadata={
+            "help": "Additional trainable parameters except LoRA weights, if low rank training."},
     )
+
 
 def smart_tokenizer_and_embedding_resize(
     special_tokens_dict: Dict,
@@ -129,8 +137,10 @@ def smart_tokenizer_and_embedding_resize(
         input_embeddings = model.get_input_embeddings().weight.data
         output_embeddings = model.get_output_embeddings().weight.data
 
-        input_embeddings_avg = input_embeddings[:-num_new_tokens].mean(dim=0, keepdim=True)
-        output_embeddings_avg = output_embeddings[:-num_new_tokens].mean(dim=0, keepdim=True)
+        input_embeddings_avg = input_embeddings[:-
+                                                num_new_tokens].mean(dim=0, keepdim=True)
+        output_embeddings_avg = output_embeddings[:-
+                                                  num_new_tokens].mean(dim=0, keepdim=True)
 
         input_embeddings[-num_new_tokens:] = input_embeddings_avg
         output_embeddings[-num_new_tokens:] = output_embeddings_avg
@@ -148,7 +158,8 @@ def _tokenize_fn(strings: Sequence[str], tokenizer: transformers.PreTrainedToken
         )
         for text in strings
     ]
-    input_ids = labels = [tokenized.input_ids[0] for tokenized in tokenized_list]
+    input_ids = labels = [tokenized.input_ids[0]
+                          for tokenized in tokenized_list]
     input_ids_lens = labels_lens = [
         tokenized.input_ids.ne(tokenizer.pad_token_id).sum().item() for tokenized in tokenized_list
     ]
@@ -167,7 +178,8 @@ def preprocess(
 ) -> Dict:
     """Preprocess the data by tokenizing."""
     examples = [s + t for s, t in zip(sources, targets)]
-    examples_tokenized, sources_tokenized = [_tokenize_fn(strings, tokenizer) for strings in (examples, sources)]
+    examples_tokenized, sources_tokenized = [_tokenize_fn(
+        strings, tokenizer) for strings in (examples, sources)]
     input_ids = examples_tokenized["input_ids"]
     labels = copy.deepcopy(input_ids)
     for label, source_len in zip(labels, sources_tokenized["input_ids_lens"]):
@@ -187,11 +199,13 @@ class SupervisedDataset(Dataset):
 
         prompt_input, prompt_no_input = PROMPT_DICT["prompt_input_llama2"], PROMPT_DICT["prompt_llama2"]
         sources = [
-            prompt_input.format_map(example) if example.get("input", "") != "" else prompt_no_input.format_map(example)
+            prompt_input.format_map(example) if example.get(
+                "input", "") != "" else prompt_no_input.format_map(example)
             for example in list_data_dict
         ]
 
-        targets = [f"{example['output']}{tokenizer.eos_token}" for example in list_data_dict]
+        targets = [
+            f"{example['output']}{tokenizer.eos_token}" for example in list_data_dict]
 
         logging.warning("Tokenizing inputs... This may take some time...")
         data_dict = preprocess(sources, targets, tokenizer)
@@ -213,11 +227,13 @@ class DataCollatorForSupervisedDataset(object):
     tokenizer: transformers.PreTrainedTokenizer
 
     def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
-        input_ids, labels = tuple([instance[key] for instance in instances] for key in ("input_ids", "labels"))
+        input_ids, labels = tuple(
+            [instance[key] for instance in instances] for key in ("input_ids", "labels"))
         input_ids = torch.nn.utils.rnn.pad_sequence(
             input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id
         )
-        labels = torch.nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=IGNORE_INDEX)
+        labels = torch.nn.utils.rnn.pad_sequence(
+            labels, batch_first=True, padding_value=IGNORE_INDEX)
         return dict(
             input_ids=input_ids,
             labels=labels,
@@ -227,41 +243,49 @@ class DataCollatorForSupervisedDataset(object):
 
 def make_supervised_data_module(tokenizer: transformers.PreTrainedTokenizer, data_args) -> Dict:
     """Make dataset and collator for supervised fine-tuning."""
-    train_dataset = SupervisedDataset(tokenizer=tokenizer, data_path=data_args.data_path)
+    train_dataset = SupervisedDataset(
+        tokenizer=tokenizer, data_path=data_args.data_path)
     data_collator = DataCollatorForSupervisedDataset(tokenizer=tokenizer)
     return dict(train_dataset=train_dataset, eval_dataset=None, data_collator=data_collator)
 
 
 def train():
-    parser = transformers.HfArgumentParser((ModelArguments, DataArguments, TrainingArguments))
+    parser = transformers.HfArgumentParser(
+        (ModelArguments, DataArguments, TrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
     # NOTE: May expand supported model types in the future
     if model_args.model_type == "gpt-neox":
-        replace_gpt_neox_attn(training_args.use_flash_attn, training_args.use_full_attn)
+        replace_gpt_neox_attn(training_args.use_flash_attn,
+                              training_args.use_full_attn)
     else:
-        replace_llama_attn(training_args.use_flash_attn, training_args.use_full_attn)
+        replace_llama_attn(training_args.use_flash_attn,
+                           training_args.use_full_attn)
 
     # Set RoPE scaling factor
     config = transformers.AutoConfig.from_pretrained(
         model_args.model_name_or_path,
+        token = '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',
         cache_dir=training_args.cache_dir,
     )
 
     orig_rope_scaling = getattr(config, "rope_scaling", None)
     if orig_rope_scaling is None:
         orig_rope_scaling = {"factor": 1}
-    orig_rope_scaling_factor = orig_rope_scaling["factor"] if "factor" in orig_rope_scaling.keys() else 1
+    orig_rope_scaling_factor = orig_rope_scaling["factor"] if "factor" in orig_rope_scaling.keys(
+    ) else 1
     orig_ctx_len = getattr(config, "max_position_embeddings", None)
     if orig_ctx_len:
         orig_ctx_len *= orig_rope_scaling_factor
         if training_args.model_max_length > orig_ctx_len:
-            scaling_factor = float(math.ceil(training_args.model_max_length / orig_ctx_len))
+            scaling_factor = float(
+                math.ceil(training_args.model_max_length / orig_ctx_len))
             config.rope_scaling = {"type": "linear", "factor": scaling_factor}
 
     # Load model and tokenizer
     model = transformers.AutoModelForCausalLM.from_pretrained(
         model_args.model_name_or_path,
+        token = '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',
         config=config,
         cache_dir=training_args.cache_dir,
         torch_dtype=torch.bfloat16,
@@ -283,6 +307,7 @@ def train():
 
     tokenizer = transformers.AutoTokenizer.from_pretrained(
         model_args.model_name_or_path,
+        token = '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',
         cache_dir=training_args.cache_dir,
         model_max_length=training_args.model_max_length,
         padding_side="right",
@@ -305,14 +330,15 @@ def train():
         model=model,
     )
 
-    data_module = make_supervised_data_module(tokenizer=tokenizer, data_args=data_args)
+    data_module = make_supervised_data_module(
+        tokenizer=tokenizer, data_args=data_args)
 
     if training_args.low_rank_training:
         if model_args.model_type == "gpt-neox":
             # added `dense` to match with llama as the basic LoRA would only target 'query_key_value'
             targets = ["query_key_value", "dense"]
         else:
-            targets=["q_proj", "k_proj", "v_proj", "o_proj"]
+            targets = ["q_proj", "k_proj", "v_proj", "o_proj"]
 
         config = LoraConfig(
             r=8,
@@ -324,7 +350,8 @@ def train():
         )
         model = get_peft_model(model, config)
         # enable trainable params
-        [p.requires_grad_() for n, p in model.named_parameters() if any([k in n for k in training_args.trainable_params.split(",")])]
+        [p.requires_grad_() for n, p in model.named_parameters() if any(
+            [k in n for k in training_args.trainable_params.split(",")])]
 
     class CastOutputToFloat(nn.Sequential):
         def forward(self, x):
@@ -349,7 +376,8 @@ def train():
     model.enable_input_require_grads()     # required for gradient checkpointing
     model.gradient_checkpointing_enable()  # enable gradient checkpointing
 
-    trainer = Trainer(model=model, tokenizer=tokenizer, args=training_args, **data_module)
+    trainer = Trainer(model=model, tokenizer=tokenizer,
+                      args=training_args, **data_module)
     trainer.train()
     trainer.save_state()
     trainer.save_model(output_dir=training_args.output_dir)
@@ -357,3 +385,26 @@ def train():
 
 if __name__ == "__main__":
     train()
+
+arg_dic = {'model_name_or_path': 'meta-llama/Llama-2-7b-hf',
+           'bf16': True,
+           'output_dir': '/home/ec2-user/SageMaker/LongLoRA/checkpoints',
+           'model_max_length': 16384,
+           'use_flash_attn': True,
+           'data_path': '/home/ec2-user/SageMaker/LongLoRA/train_data.json',
+           'low_rank_training': True,
+           'num_train_epochs': 1,
+           'per_device_train_batch_size': 1,
+           'per_device_eval_batch_size': 2,
+           'gradient_accumulation_steps': 8,
+           'evaluation_strategy': "no",
+           'save_strategy': "steps",
+           'save_steps': 20,
+           'save_total_limit': 2,
+           'learning_rate': 2e-5,
+           'weight_decay': 0.0,
+           'warmup_steps': 4,
+           'lr_scheduler_type': "constant_with_warmup",
+           'logging_steps': 1,
+           'deepspeed': "ds_configs/stage2.json",
+           'tf32': True}
